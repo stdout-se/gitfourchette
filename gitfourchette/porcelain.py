@@ -758,10 +758,10 @@ class Repo(_VanillaRepository):
         assert not _isabs(path)
 
         parent = self.commondir if common else self.path
-
+        parent_resolved = _Path(parent).resolve()
         p = _Path(parent, path).resolve()
 
-        if not p.is_relative_to(parent):
+        if not p.is_relative_to(parent_resolved):
             raise ValueError("Won't resolve absolute path outside gitdir")
 
         return str(p)
@@ -918,7 +918,29 @@ class Repo(_VanillaRepository):
                 # See: https://stackoverflow.com/questions/8839958
                 continue
 
+            # Check if this is a symbolic reference (e.g., repo tool's refs/remotes/m/master)
+            # and resolve it to the target reference
+            ref = self.references.get(refname)
+            if ref and ref.type == ReferenceType.SYMBOLIC:
+                try:
+                    resolved_ref = ref.resolve()
+                    # Use the resolved reference instead
+                    refname = resolved_ref.name
+                    prefix, shorthand = RefPrefix.split(refname)
+                    # If resolved ref is not a remote ref, skip it
+                    if prefix != RefPrefix.REMOTES:
+                        continue
+                except KeyError:
+                    # Stale symbolic reference - skip it
+                    continue
+
             remote_name, branch_name = split_remote_branch_shorthand(shorthand)
+            # Skip references without a branch name (e.g., refs/remotes/git-svn from git svn clone)
+            if not branch_name:
+                continue
+            # Skip references that don't match any known remote (e.g., stale refs from deleted remotes)
+            if remote_name not in names:
+                continue
             if value_style == "strip":
                 value = branch_name
             elif value_style == "shorthand":
