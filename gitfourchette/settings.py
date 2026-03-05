@@ -169,6 +169,7 @@ class Prefs(PrefsFile):
     autoRefresh                 : bool                  = True
     autoFetchMinutes            : int                   = 5
     flattenLanes                : bool                  = True
+    signOffEnabled              : bool                  = False
     animations                  : bool                  = True
     condensedFonts              : bool                  = True
     pygmentsPlugins             : bool                  = False
