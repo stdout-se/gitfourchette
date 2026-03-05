@@ -95,6 +95,7 @@ class NewCommit(RepoTask):
         signatureIsOverridden = overriddenSignatureKind != SignatureOverride.Nothing
         explicitGpgSign = cd.ui.gpg.explicitSign()
         explicitNoGpgSign = cd.ui.gpg.explicitNoSign()
+        signoff = cd.ui.signOffCheckBox.isChecked()
 
         # Save commit message/signature as draft now,
         # so we don't lose it if the commit operation fails or is rejected.
@@ -113,7 +114,8 @@ class NewCommit(RepoTask):
         args, env = NewCommit.prepareGitCommand(
             message, author, committer,
             explicitGpgSign=explicitGpgSign,
-            explicitNoGpgSign=explicitNoGpgSign)
+            explicitNoGpgSign=explicitNoGpgSign,
+            signoff=signoff)
         driver = yield from self.flowCallGit(*args, env=env)
 
         branchName, newHash = driver.readPostCommitInfo()
@@ -143,7 +145,8 @@ class NewCommit(RepoTask):
             committer: Signature | None,
             amend=False,
             explicitGpgSign=False,
-            explicitNoGpgSign=False):
+            explicitNoGpgSign=False,
+            signoff=False):
         def signatureEnvironmentVariables(sig: Signature, infix: str) -> dict[str, str]:
             return {
                 f"GIT_{infix}_NAME": sig.name,
@@ -156,6 +159,7 @@ class NewCommit(RepoTask):
             "commit",
             *argsIf(explicitGpgSign, "--gpg-sign"),
             *argsIf(explicitNoGpgSign, "--no-gpg-sign"),
+            *argsIf(signoff, "--signoff"),
             *argsIf(amend, "--amend"),
             *argsIf(amend and author, "--reset-author"),
             "--allow-empty",
@@ -228,10 +232,12 @@ class AmendCommit(RepoTask):
         committer = cd.getOverriddenCommitterSignature() or fallbackSignature
         explicitGpgSign = cd.ui.gpg.explicitSign()
         explicitNoGpgSign = cd.ui.gpg.explicitNoSign()
+        signoff = cd.ui.signOffCheckBox.isChecked()
 
         self.effects |= TaskEffects.Workdir | TaskEffects.Refs | TaskEffects.Head
         args, env = NewCommit.prepareGitCommand(message, author, committer, amend=True,
-                                                explicitGpgSign=explicitGpgSign, explicitNoGpgSign=explicitNoGpgSign)
+                                                explicitGpgSign=explicitGpgSign, explicitNoGpgSign=explicitNoGpgSign,
+                                                signoff=signoff)
         driver = yield from self.flowCallGit(*args, env=env)
 
         branchName, newHash = driver.readPostCommitInfo()
