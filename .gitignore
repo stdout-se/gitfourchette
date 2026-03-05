@@ -13,3 +13,6 @@ test/data/windows_wrappers.tmp/
 !/.idea/icon.svg
 !/.idea/modules.xml
 !/.idea/runConfigurations/
+
+venv/
+.venv/
