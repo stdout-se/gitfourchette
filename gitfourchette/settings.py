@@ -144,6 +144,7 @@ class Prefs(PrefsFile):
     autoFetchMinutes            : int                   = 5
     middleClickToStage          : bool                  = False
     flattenLanes                : bool                  = True
+    signOffEnabled              : bool                  = False
     animations                  : bool                  = True
     condensedFonts              : bool                  = True
     pygmentsPlugins             : bool                  = False
