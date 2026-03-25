@@ -297,8 +297,10 @@ def testBlameGutterToolTips(blameWindow):
     # Jump to uncommitted changes
     qcbSetIndex(blameWindow.scrubber, "uncommitted")
 
+    blameWindow.activateWindow()
+    waitUntilTrue(lambda: blameWindow.window().isActiveWindow())
     blameWindow.textEdit.setFocus()
-    assert blameWindow.textEdit.hasFocus()
+    waitUntilTrue(blameWindow.textEdit.hasFocus)
 
     toolTipFragments = [
         ["not committed yet", "hello.txt"],

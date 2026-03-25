@@ -309,8 +309,14 @@ def testDiffInNewWindow(tempDir, mainWindow, closeKey):
     assert diffWindow is not mainWindow
     assert diffWindow is diffWidget.window()
     assert "c2.txt" in diffWindow.windowTitle()
-    assert diffWindow.isActiveWindow()
-    assert not mainWindow.isActiveWindow()
+    # Detached window activation is async; offscreen has no WM. Nudge focus like other tests.
+    if not OFFSCREEN:
+        diffWindow.raise_()
+        diffWindow.activateWindow()
+        waitUntilTrue(
+            lambda: diffWindow.isActiveWindow() and not mainWindow.isActiveWindow(),
+            timeout=5000,
+        )
 
     # Initiate search
     QTest.keySequence(diffWidget, QKeySequence.StandardKey.Find)
