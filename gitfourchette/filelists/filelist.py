@@ -29,6 +29,41 @@ from gitfourchette.toolbox import *
 from gitfourchette.trtables import TrTables
 
 
+def deltaAllowsExternalDiffTool(delta: GitDelta) -> bool:
+    if delta.status == "U":
+        return False
+    if delta.new.mode == FileMode.COMMIT:
+        return False
+    return True
+
+
+def openDeltaInExternalDiffTool(invoker: QWidget, repo: Repo, delta: GitDelta):
+    if delta.new.isId0():
+        raise FileNotFoundError(_("Can’t open external diff tool on a deleted file."))
+
+    if delta.old.isId0():
+        raise FileNotFoundError(_("Can’t open external diff tool on a new file."))
+
+    diffDir = qTempDir()
+
+    if delta.context == NavContext.UNSTAGED:
+        # Unstaged: compare indexed state to workdir file
+        oldPath = delta.old.dump(repo, diffDir, "[INDEXED]")
+        newPath = repo.in_workdir(delta.new.path)
+    elif delta.context == NavContext.STAGED:
+        # Staged: compare HEAD state to indexed state
+        oldPath = delta.old.dump(repo, diffDir, "[HEAD]")
+        newPath = delta.new.dump(repo, diffDir, "[STAGED]")
+    elif delta.context == NavContext.COMMITTED:
+        # Committed: compare parent state to this commit
+        oldPath = delta.old.dump(repo, diffDir, "[OLD]")
+        newPath = delta.new.dump(repo, diffDir, "[NEW]")
+    else:
+        raise NotImplementedError(f"unsupported context {delta.context}")
+
+    return ToolProcess.startDiffTool(invoker, oldPath, newPath)
+
+
 class FileListDelegate(QStyledItemDelegate):
     """
     Item delegate for QListView that supports highlighting search terms from a SearchBar
@@ -173,6 +208,7 @@ class FileList(QListView):
 
         makeWidgetShortcut(self, self.searchBar.hideOrBeep, "Escape")
         makeWidgetShortcut(self, self.copyPaths, QKeySequence.StandardKey.Copy)
+        makeWidgetShortcut(self, self.onOpenInDiffToolShortcut, "F4")
 
     def refreshPrefs(self):
         self.setVerticalScrollMode(settings.prefs.listViewScrollMode)
@@ -320,7 +356,8 @@ class FileList(QListView):
             ActionDef(
                 _("Open Diff in {0}", settings.getDiffToolName()),
                 self.wantOpenInDiffTool,
-                icon="vcs-diff"),
+                icon="vcs-diff",
+                shortcuts="F4"),
 
             ActionDef(
                 _n("E&xport Diff As Patch…", "E&xport Diffs As Patch…", n),
@@ -401,36 +438,24 @@ class FileList(QListView):
         self.confirmBatch(run, _("Open in external editor"),
                           _("Really open <b>{n} files</b> in external editor?"))
 
+    def shortcutsAllowOpenInDiffTool(self) -> bool:
+        deltas = list(self.selectedDeltas())
+        if not deltas:
+            return False
+        return all(deltaAllowsExternalDiffTool(d) for d in deltas)
+
+    def onOpenInDiffToolShortcut(self):
+        if not self.shortcutsAllowOpenInDiffTool():
+            QApplication.beep()
+            return
+        self.wantOpenInDiffTool()
+
     def wantOpenInDiffTool(self):
         self.confirmBatch(self._openInDiffTool, _("Open in external diff tool"),
                           _("Really open <b>{n} files</b> in external diff tool?"))
 
     def _openInDiffTool(self, delta: GitDelta):
-        if delta.new.isId0():
-            raise FileNotFoundError(_("Can’t open external diff tool on a deleted file."))
-
-        if delta.old.isId0():
-            raise FileNotFoundError(_("Can’t open external diff tool on a new file."))
-
-        diffDir = qTempDir()
-        repo = self.repo
-
-        if delta.context == NavContext.UNSTAGED:
-            # Unstaged: compare indexed state to workdir file
-            oldPath = delta.old.dump(repo, diffDir, "[INDEXED]")
-            newPath = repo.in_workdir(delta.new.path)
-        elif delta.context == NavContext.STAGED:
-            # Staged: compare HEAD state to indexed state
-            oldPath = delta.old.dump(repo, diffDir, "[HEAD]")
-            newPath = delta.new.dump(repo, diffDir, "[STAGED]")
-        elif delta.context == NavContext.COMMITTED:
-            # Committed: compare parent state to this commit
-            oldPath = delta.old.dump(repo, diffDir, "[OLD]")
-            newPath = delta.new.dump(repo, diffDir, "[NEW]")
-        else:
-            raise NotImplementedError(f"unsupported context {delta.context}")
-
-        return ToolProcess.startDiffTool(self, oldPath, newPath)
+        return openDeltaInExternalDiffTool(self, self.repo, delta)
 
     def showInFolder(self):
         def run(delta: GitDelta):

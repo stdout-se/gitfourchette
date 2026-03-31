@@ -16,6 +16,7 @@ from gitfourchette.codeview.codeview import CodeView
 from gitfourchette.diffview.diffdocument import DiffDocument, LineData
 from gitfourchette.diffview.diffgutter import DiffGutter
 from gitfourchette.diffview.diffhighlighter import DiffHighlighter
+from gitfourchette.filelists.filelist import deltaAllowsExternalDiffTool, openDeltaInExternalDiffTool
 from gitfourchette.gitdriver import GitDelta
 from gitfourchette.globalshortcuts import GlobalShortcuts
 from gitfourchette.localization import *
@@ -24,6 +25,7 @@ from gitfourchette.porcelain import *
 from gitfourchette.qt import *
 from gitfourchette.subpatch import extractSubpatch
 from gitfourchette.tasks import ApplyPatch, ApplyPatchData
+from gitfourchette.tasks.repotask import showMultiFileErrorMessage
 from gitfourchette.toolbox import *
 
 logger = logging.getLogger(__name__)
@@ -88,6 +90,7 @@ class DiffView(CodeView):
 
         makeWidgetShortcut(self, self.onStageShortcut, *GlobalShortcuts.stageHotkeys)
         makeWidgetShortcut(self, self.onDiscardShortcut, *GlobalShortcuts.discardHotkeys)
+        makeWidgetShortcut(self, self.onOpenInDiffToolShortcut, "F4")
 
     # ---------------------------------------------
     # Callbacks for Qt events/shortcuts
@@ -107,6 +110,20 @@ class DiffView(CodeView):
             self.discardSelection()
         else:
             QApplication.beep()
+
+    def onOpenInDiffToolShortcut(self):
+        if self.repo is None or self.currentDelta is _emptyDelta:
+            QApplication.beep()
+            return
+        if not deltaAllowsExternalDiffTool(self.currentDelta):
+            QApplication.beep()
+            return
+        try:
+            openDeltaInExternalDiffTool(self, self.repo, self.currentDelta)
+        except (OSError, NotImplementedError) as exc:
+            errors = MultiFileError()
+            errors.add_file_error(self.currentDelta.new.path, exc)
+            showMultiFileErrorMessage(self, errors, _("Open in external diff tool"))
 
     def mouseReleaseEvent(self, event: QMouseEvent):
         super().mouseReleaseEvent(event)
